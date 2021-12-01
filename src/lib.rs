@@ -9,7 +9,7 @@ use ckb_types::{
     prelude::Entity,
 };
 use json::{self, JsonValue};
-use std::{convert::TryInto, fs::File, io::Read};
+use std::{convert::{TryFrom, TryInto}, fs::File, io::Read};
 
 fn vec_to_slice<T, const N: usize>(v: Vec<T>) -> [T; N] {
     v.try_into()
@@ -45,13 +45,15 @@ fn fmt_vec(d: &[u8]) -> String {
 fn gen_json_script(sc: &Script) -> JsonValue {
     let mut json = JsonValue::new_object();
     json["code_hash"] = fmt_vec(sc.code_hash().as_slice()).into();
-    if sc.hash_type() == ScriptHashType::Data.into() {
-        json["hash_type"] = "data".into();
-    } else if sc.hash_type() == ScriptHashType::Type.into() {
-        json["hash_type"] = "type".into();
-    } else if sc.hash_type() == ScriptHashType::Data1.into() {
-        json["hash_type"] = "data1".into();
-    }
+    json["hash_type"] = {
+        let t: u8 = sc.hash_type().into();
+        let t = ScriptHashType::try_from(t).clone().unwrap();
+        match t {
+            ScriptHashType::Data => "data".into(),
+            ScriptHashType::Type => "type".into(),
+            ScriptHashType::Data1 => "data1".into(),
+        }
+    };
     json["args"] = fmt_vec(sc.args().raw_data().to_vec().as_slice()).into();
 
     json
@@ -239,13 +241,13 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
         "group_index is not bin_path"
     );
     let group_type = {
-        if group_script_type == ScriptGroupType::Lock {
-            "lock"
-        } else if group_script_type == ScriptGroupType::Type {
-            "type"
-        } else {
-            assert!(false);
-            ""
+        match group_script_type {
+            ScriptGroupType::Lock => {
+                "lock"
+            }
+            ScriptGroupType::Type => {
+                "type"
+            }
         }
     };
     let json_file_name = std::fs::canonicalize(json_file_name).expect("cannot get absolute path");

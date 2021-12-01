@@ -264,7 +264,7 @@ fn gen_ckb_tx(
 }
 
 #[test]
-fn test_mulit() {
+fn test_multiple() {
     let mut deps: HashMap<u32, CkbDepsData> = HashMap::new();
 
     deps.insert(
@@ -374,7 +374,7 @@ fn test_mulit() {
 }
 
 #[test]
-fn test_sign() {
+fn test_single() {
     let mut deps: HashMap<u32, CkbDepsData> = HashMap::new();
 
     deps.insert(
