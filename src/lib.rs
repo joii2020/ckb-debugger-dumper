@@ -9,7 +9,11 @@ use ckb_types::{
     prelude::Entity,
 };
 use json::{self, JsonValue};
-use std::{convert::{TryFrom, TryInto}, fs::File, io::Read};
+use std::{
+    convert::{TryFrom, TryInto},
+    fs::File,
+    io::Read,
+};
 
 fn vec_to_slice<T, const N: usize>(v: Vec<T>) -> [T; N] {
     v.try_into()
@@ -84,38 +88,20 @@ fn gen_json_cell_dep(cell: &CellMeta) -> JsonValue {
     js_cell
 }
 
-fn get_ckb_vm_version<'a, DL: CellDataProvider + HeaderProvider>(
-    verifier: &TransactionScriptsVerifier<'a, DL>,
-    group_index: usize,
-) -> String {
-    let cur_cell: Vec<&'_ ScriptGroup> = verifier
-        .groups()
-        .map(|(_type, _data, script)| script)
-        .collect();
-    let cur_cell = cur_cell.get(group_index).unwrap();
-
-    let ver = verifier.select_version(&cur_cell.script).unwrap();
-
-    format!("0x{:x}", ver as u32)
-}
-
-fn gen_json_data<'a, DL: CellDataProvider + HeaderProvider>(
-    verifier: &TransactionScriptsVerifier<'a, DL>,
-    resolved_tx: &ResolvedTransaction,
-    group_index: usize,
-    bin_hash: &Byte32,
-) -> JsonValue {
+fn gen_json_data(resolved_tx: &ResolvedTransaction, bin_hash: &Byte32) -> JsonValue {
     let mut js_root: JsonValue = JsonValue::new_object();
     js_root["mock_info"] = {
         let mut js = JsonValue::new_object();
         js["inputs"] = {
             let mut js_inputs: Vec<JsonValue> = Vec::new();
+            let mut index: usize = 0;
             for cell in &resolved_tx.resolved_inputs {
                 js_inputs.push({
                     let mut js_cell = JsonValue::new_object();
                     js_cell["input"] = {
                         let mut js = JsonValue::new_object();
-                        js["since"] = "0x0".into();
+                        let since = resolved_tx.transaction.inputs().get(index).unwrap().since();
+                        js["since"] = fmt_u64(since.as_slice()).into();
                         js["previous_output"] = gen_json_outpoint(&cell.out_point);
                         js
                     };
@@ -124,6 +110,7 @@ fn gen_json_data<'a, DL: CellDataProvider + HeaderProvider>(
                         fmt_vec(cell.mem_cell_data.clone().unwrap().to_vec().as_slice()).into();
                     js_cell
                 });
+                index += 0;
             }
             JsonValue::Array(js_inputs)
         };
@@ -150,8 +137,10 @@ fn gen_json_data<'a, DL: CellDataProvider + HeaderProvider>(
     };
     js_root["tx"] = {
         let mut js_tx = JsonValue::new_object();
+        js_tx["version"] = fmt_u32(&resolved_tx.transaction.version().to_le_bytes()).into();
 
-        js_tx["version"] = get_ckb_vm_version(verifier, group_index).into();
+        resolved_tx.transaction.version();
+
         js_tx["cell_deps"] = {
             let mut cell_deps: Vec<JsonValue> = Vec::new();
             for cell in &resolved_tx.resolved_cell_deps {
@@ -163,13 +152,17 @@ fn gen_json_data<'a, DL: CellDataProvider + HeaderProvider>(
         js_tx["header_deps"] = JsonValue::new_array();
         js_tx["inputs"] = {
             let mut js_inputs: Vec<JsonValue> = Vec::new();
+            let mut index: usize = 0;
             for cell in &resolved_tx.resolved_inputs {
+                let input = resolved_tx.transaction.inputs().get(index).unwrap();
+
                 js_inputs.push({
                     let mut js = JsonValue::new_object();
-                    js["since"] = "0x0".into();
+                    js["since"] = fmt_u64(input.since().as_slice()).into();
                     js["previous_output"] = gen_json_outpoint(&cell.out_point);
                     js
                 });
+                index += 1;
             }
             JsonValue::Array(js_inputs)
         };
@@ -182,15 +175,17 @@ fn gen_json_data<'a, DL: CellDataProvider + HeaderProvider>(
         };
         js_tx["outputs_data"] = {
             let mut js_data: Vec<JsonValue> = Vec::new();
-            for cell in &resolved_tx.resolved_inputs {
-                js_data
-                    .push(fmt_vec(cell.mem_cell_data.clone().unwrap().to_vec().as_slice()).into());
+            let output_datas = &resolved_tx.transaction.outputs_data();
+            for i in 0..output_datas.len() {
+                let data = output_datas.get(i).unwrap();
+                js_data.push(fmt_vec(data.as_slice().to_vec().split_at(4).1).into());
             }
             JsonValue::Array(js_data)
         };
         js_tx["witnesses"] = {
             let mut js_witness: Vec<JsonValue> = Vec::new();
             for data in resolved_tx.transaction.witnesses() {
+                let data = data.as_bytes().to_vec().split_at(4).1.to_vec();
                 js_witness.push(fmt_vec(data.as_slice()).into());
             }
             JsonValue::Array(js_witness)
@@ -220,11 +215,12 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     group_index: usize,
     bin_path: &str,
     json_file_name: &str,
+    dbg_addr: Option<&str>,
 ) -> String {
     let bin_path = std::fs::canonicalize(bin_path).expect("cannot get absolute path");
 
     let bin_hash = get_bin_hash(bin_path.to_str().unwrap());
-    let js_root = gen_json_data(verifier, resolved_tx, group_index, &bin_hash);
+    let js_root = gen_json_data(resolved_tx, &bin_hash);
     let path = String::from(json_file_name);
     let mut fs = File::create(path).expect("create json file failed");
     js_root.write_pretty(&mut fs, 2).expect("write json failed");
@@ -242,12 +238,8 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     );
     let group_type = {
         match group_script_type {
-            ScriptGroupType::Lock => {
-                "lock"
-            }
-            ScriptGroupType::Type => {
-                "type"
-            }
+            ScriptGroupType::Lock => "lock",
+            ScriptGroupType::Type => "type",
         }
     };
     let json_file_name = std::fs::canonicalize(json_file_name).expect("cannot get absolute path");
@@ -260,11 +252,22 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
         };
         fmt_vec(script.calc_script_hash().as_slice())
     };
+
+    let ckb_dbg_str: String = {
+        if dbg_addr.is_none() {
+            String::new()
+        } else {
+            format!(" --mode gdb --gdb-listen {}", dbg_addr.unwrap())
+        }
+    };
+
     String::from(format!(
-        "ckb-debugger --bin {} --tx-file {} --script-group-type {} --script-hash {}",
+        "ckb-debugger --bin {} --tx-file {} --cell-index {} --script-group-type {} --script-hash {}{}",
         bin_path.to_str().unwrap(),
         json_file_name.to_str().unwrap(),
+        group_index,
         group_type,
-        script_hash
+        script_hash,
+        ckb_dbg_str,
     ))
 }

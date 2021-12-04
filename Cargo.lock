@@ -148,6 +148,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ckb-debugger-dumper"
+version = "0.100.0-rc2"
+dependencies = [
+ "ckb-chain-spec",
+ "ckb-crypto",
+ "ckb-error",
+ "ckb-hash",
+ "ckb-jsonrpc-types",
+ "ckb-script",
+ "ckb-traits",
+ "ckb-types",
+ "ckb-vm",
+ "json",
+ "lazy_static",
+ "molecule",
+ "rand 0.6.5",
+]
+
+[[package]]
 name = "ckb-error"
 version = "0.100.0-rc2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -333,25 +352,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8629d61183ab240fe0c598b5723c16bc9741691df2261574ff04c6fb87cb070d"
 dependencies = [
  "ckb-types",
-]
-
-[[package]]
-name = "ckb-transaction-dumper-rs"
-version = "0.1.0"
-dependencies = [
- "ckb-chain-spec",
- "ckb-crypto",
- "ckb-error",
- "ckb-hash",
- "ckb-jsonrpc-types",
- "ckb-script",
- "ckb-traits",
- "ckb-types",
- "ckb-vm",
- "json",
- "lazy_static",
- "molecule",
- "rand 0.6.5",
 ]
 
 [[package]]
