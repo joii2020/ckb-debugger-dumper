@@ -32,3 +32,29 @@ File for exporting transaction data
 
 ### return value
 According to the ckb-debugger command generated from these data, some of the file paths will be replaced with absolute paths.
+
+## For example
+
+```rust
+pub fn dumper(&self, bin_path: &str, dumper_name: &str) -> String {
+    let consensus = TX::gen_consensus();
+    let tx_env = TX::gen_tx_env();
+    let verifier = TransactionScriptsVerifier::new(
+        &self.resolved_tx,
+        &consensus,
+        &self.data_loader,
+        &tx_env,
+    );
+    ckb_debugger_dumper::gen_json(
+        &verifier,
+        &self.resolved_tx,
+        Option::None,
+        0,
+        bin_path,
+        dumper_name,
+        Option::None,
+    )
+}
+```
+This code is [here](https://github.com/joii2020/ckb-production-scripts/blob/compact_udt_lock_debugger/tests/compact_udt_rust/src/lib.rs#L1144)
+
