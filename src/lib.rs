@@ -3,13 +3,14 @@ use ckb_traits::{CellDataProvider, HeaderProvider};
 use ckb_types::{
     core::{
         cell::{CellMeta, ResolvedTransaction},
-        ScriptHashType,
+        HeaderView, ScriptHashType,
     },
     packed::{Byte32, CellOutput, OutPoint, Script},
     prelude::Entity,
 };
 use json::{self, JsonValue};
 use std::{
+    collections::HashMap,
     convert::{TryFrom, TryInto},
     fs::File,
     io::Read,
@@ -84,11 +85,23 @@ fn gen_json_cell_dep(cell: &CellMeta) -> JsonValue {
     let mut js_cell = JsonValue::new_object();
 
     js_cell["out_point"] = gen_json_outpoint(&cell.out_point);
-    js_cell["dep_type"] = "code".into(); // TODO
+    js_cell["dep_type"] = "code".into();
     js_cell
 }
 
-fn gen_json_data(resolved_tx: &ResolvedTransaction, bin_hash: &Byte32) -> JsonValue {
+fn gen_json_cell_dep_group(cell: &CellMeta) -> JsonValue {
+    let mut js_cell = JsonValue::new_object();
+
+    js_cell["out_point"] = gen_json_outpoint(&cell.out_point);
+    js_cell["dep_type"] = "dep_group".into();
+    js_cell
+}
+
+fn gen_json_data(
+    resolved_tx: &ResolvedTransaction,
+    bin_hash: &Byte32,
+    header_deps: &Option<HashMap<Byte32, HeaderView>>,
+) -> JsonValue {
     let mut js_root: JsonValue = JsonValue::new_object();
     js_root["mock_info"] = {
         let mut js = JsonValue::new_object();
@@ -130,9 +143,61 @@ fn gen_json_data(resolved_tx: &ResolvedTransaction, bin_hash: &Byte32) -> JsonVa
                     js_cell_dep
                 });
             }
+            for cell in &resolved_tx.resolved_dep_groups {
+                js_celldeps.push({
+                    let mut js_cell_dep = JsonValue::new_object();
+                    js_cell_dep["cell_dep"] = gen_json_cell_dep_group(cell);
+                    js_cell_dep["output"] = gen_json_output(&cell.cell_output);
+                    if *bin_hash == cell.mem_cell_data_hash.clone().unwrap() {
+                        js_cell_dep["data"] = "0x".into();
+                    } else {
+                        js_cell_dep["data"] =
+                            fmt_vec(cell.mem_cell_data.clone().unwrap().to_vec().as_slice()).into();
+                    }
+                    js_cell_dep
+                });
+            }
             JsonValue::Array(js_celldeps)
         };
-        js["header_deps"] = JsonValue::new_array();
+        let mut js_header_vec: Vec<JsonValue> = Vec::new();
+        let headers = header_deps.clone().unwrap();
+
+        for i in 0..resolved_tx.transaction.header_deps().len() {
+            js_header_vec.push({
+                let hash = resolved_tx.transaction.header_deps().get(i).unwrap();
+
+                let mut js = JsonValue::new_object();
+                js["hash"] = fmt_vec(hash.as_slice()).into();
+
+                let header_data = headers.get(&hash).unwrap();
+                js["version"] =
+                    fmt_u32(header_data.version().to_le_bytes().to_vec().as_slice()).into();
+                js["compact_target"] = fmt_u32(
+                    header_data
+                        .compact_target()
+                        .to_le_bytes()
+                        .to_vec()
+                        .as_slice(),
+                )
+                .into();
+                js["timestamp"] =
+                    fmt_vec(header_data.timestamp().to_le_bytes().to_vec().as_slice()).into();
+                js["number"] =
+                    fmt_u64(header_data.number().to_le_bytes().to_vec().as_slice()).into();
+                js["epoch"] = fmt_u64(&header_data.epoch().index().to_le_bytes()).into();
+                js["parent_hash"] = fmt_vec(header_data.parent_hash().as_slice()).into();
+                js["transactions_root"] =
+                    fmt_vec(header_data.transactions_root().as_slice()).into();
+                js["proposals_hash"] = fmt_vec(header_data.proposals_hash().as_slice()).into();
+                js["extra_hash"] = fmt_vec(header_data.extra_hash().as_slice()).into();
+                js["dao"] = fmt_vec(header_data.dao().as_slice()).into();
+                js["nonce"] = fmt_vec(header_data.nonce().to_le_bytes().to_vec().as_slice()).into();
+
+                js
+            });
+        }
+        js["header_deps"] = JsonValue::Array(js_header_vec);
+
         js
     };
     js_root["tx"] = {
@@ -147,9 +212,28 @@ fn gen_json_data(resolved_tx: &ResolvedTransaction, bin_hash: &Byte32) -> JsonVa
                 let js_cell = gen_json_cell_dep(cell);
                 cell_deps.push(js_cell);
             }
+            for cell in &resolved_tx.resolved_dep_groups {
+                let js_cell = gen_json_cell_dep_group(cell);
+                cell_deps.push(js_cell);
+            }
             JsonValue::Array(cell_deps)
         };
-        js_tx["header_deps"] = JsonValue::new_array();
+        let mut js_header_vec: Vec<JsonValue> = Vec::new();
+        for i in 0..resolved_tx.transaction.header_deps().len() {
+            js_header_vec.push(
+                fmt_vec(
+                    resolved_tx
+                        .transaction
+                        .header_deps()
+                        .get(i)
+                        .unwrap()
+                        .as_slice(),
+                )
+                .into(),
+            );
+        }
+        js_tx["header_deps"] = JsonValue::Array(js_header_vec);
+
         js_tx["inputs"] = {
             let mut js_inputs: Vec<JsonValue> = Vec::new();
             let mut index: usize = 0;
@@ -212,6 +296,7 @@ fn get_bin_hash(path: &str) -> Byte32 {
 pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     verifier: &TransactionScriptsVerifier<'a, DL>,
     resolved_tx: &ResolvedTransaction,
+    header_deps: Option<HashMap<Byte32, HeaderView>>,
     group_index: usize,
     bin_path: &str,
     json_file_name: &str,
@@ -220,7 +305,7 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     let bin_path = std::fs::canonicalize(bin_path).expect("cannot get absolute path");
 
     let bin_hash = get_bin_hash(bin_path.to_str().unwrap());
-    let js_root = gen_json_data(resolved_tx, &bin_hash);
+    let js_root = gen_json_data(resolved_tx, &bin_hash, &header_deps);
     let path = String::from(json_file_name);
     let mut fs = File::create(path).expect("create json file failed");
     js_root.write_pretty(&mut fs, 2).expect("write json failed");

@@ -174,6 +174,7 @@ pub fn gen_cell_output(
 pub fn gen_ckb_tx(
     cells: Vec<CkbCellData>,
     deps: HashMap<u32, CkbDepsData>,
+    header_dep: Vec<HeaderView>,
 ) -> (ResolvedTransaction, DummyDataLoader) {
     let mut tx_builder = TransactionBuilder::default();
     let mut dummy = DummyDataLoader::new();
@@ -242,6 +243,10 @@ pub fn gen_ckb_tx(
         }
 
         tx_builder = tx_builder.witness(witness.build().as_bytes().pack());
+    }
+
+    for header in header_dep {
+        tx_builder = tx_builder.header_dep(header.hash());
     }
 
     let tx_builder = tx_builder.build();
