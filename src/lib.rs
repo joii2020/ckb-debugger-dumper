@@ -322,11 +322,11 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
         let (t, s) = groups_info.get(group_index).unwrap();
         (*t, *s)
     };
-    assert_eq!(
-        script_group.script.code_hash(),
-        bin_hash,
-        "group_index is not bin_path"
-    );
+    // assert_eq!(
+    //     script_group.script.code_hash(),
+    //     bin_hash,
+    //     "group_index is not bin_path"
+    // );
     let group_type = {
         match group_script_type {
             ScriptGroupType::Lock => "lock",

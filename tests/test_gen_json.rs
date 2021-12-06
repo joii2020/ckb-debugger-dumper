@@ -23,10 +23,11 @@ fn gen_deps() -> HashMap<u32, CkbDepsData> {
         0,
         CkbDepsData {
             data: load_bin(&DUMP_BIN_PATH),
-            data_type: ScriptHashType::Data1,
+            data_type: ScriptHashType::Type,
             tx_hash: Byte32::new([1; 32]),
             tx_index: 0,
             out_point: Option::None,
+            type_hash: Option::None,
         },
     );
 
@@ -38,6 +39,7 @@ fn gen_deps() -> HashMap<u32, CkbDepsData> {
             tx_hash: Byte32::new([2; 32]),
             tx_index: 0,
             out_point: Option::None,
+            type_hash: Option::None,
         },
     );
 
@@ -49,6 +51,7 @@ fn gen_deps() -> HashMap<u32, CkbDepsData> {
             tx_hash: Byte32::new([3; 32]),
             tx_index: 0,
             out_point: Option::None,
+            type_hash: Option::None,
         },
     );
     deps

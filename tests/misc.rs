@@ -13,7 +13,7 @@ use ckb_types::{
     prelude::*,
 };
 use rand::{thread_rng, Rng};
-use std::{collections::HashMap, io::Read};
+use std::{any::Any, collections::HashMap, io::Read};
 
 #[derive(Default)]
 pub struct DummyDataLoader {
@@ -85,6 +85,7 @@ pub struct CkbDepsData {
     pub tx_index: u32,
 
     pub out_point: Option<OutPoint>,
+    pub type_hash: Option<Byte32>,
 }
 
 #[derive(Clone)]
@@ -146,7 +147,13 @@ pub fn load_bin(path: &String) -> Bytes {
 
 pub fn gen_cell_script(script: CkbScriptData, deps: &HashMap<u32, CkbDepsData>) -> Script {
     let code = deps.get(&script.script_id).unwrap();
-    let code_hash = CellOutput::calc_data_hash(&code.data);
+    let code_hash = {
+        if code.data_type == ScriptHashType::Type {
+            code.type_hash.clone().unwrap()
+        } else {
+            CellOutput::calc_data_hash(&code.data)
+        }
+    };
     let ret = Script::new_builder()
         .args(script.args.pack())
         .code_hash(code_hash)
@@ -179,20 +186,38 @@ pub fn gen_ckb_tx(
     let mut tx_builder = TransactionBuilder::default();
     let mut dummy = DummyDataLoader::new();
 
+    let mut deps_max_count: u32 = 0;
+    for (id, _) in &deps {
+        if *id > deps_max_count {
+            deps_max_count = *id;
+        }
+    }
     let mut deps = deps;
-
-    for i in 0..deps.len() {
-        let dep = deps.get_mut(&(i as u32));
+    for i in 0..deps_max_count {
+        let dep = deps.get_mut(&i);
         if dep.is_none() {
             continue;
         }
+
         let dep = dep.unwrap();
+
         let out_point = OutPoint::new(dep.tx_hash.clone(), dep.tx_index.clone());
 
+        let mut output_builder =
+            CellOutput::new_builder().capacity(Capacity::bytes(dep.data.len()).unwrap().pack());
+
+        if dep.data_type == ScriptHashType::Type {
+            let type_sc: Script = Script::new_builder()
+                .args(Bytes::from([0xFF; 32].to_vec()).pack())
+                .code_hash(Byte32::new([0xFE; 32]))
+                .hash_type(ScriptHashType::Data1.into())
+                .build();
+            dep.type_hash = Some(type_sc.calc_script_hash());
+            output_builder = output_builder.type_(Some(type_sc).pack());
+        }
+
         // dep contract code
-        let sighash_all_cell = CellOutput::new_builder()
-            .capacity(Capacity::bytes(dep.data.len()).unwrap().pack())
-            .build();
+        let sighash_all_cell = output_builder.build();
         dummy
             .cells
             .insert(out_point.clone(), (sighash_all_cell, dep.data.clone()));
