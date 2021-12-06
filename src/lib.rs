@@ -113,8 +113,11 @@ fn gen_json_data(
                     let mut js_cell = JsonValue::new_object();
                     js_cell["input"] = {
                         let mut js = JsonValue::new_object();
-                        let since = resolved_tx.transaction.inputs().get(index).unwrap().since();
-                        js["since"] = fmt_u64(since.as_slice()).into();
+                        js["since"] = {
+                            let input = resolved_tx.transaction.inputs().get(index).unwrap();
+                            let since = input.since();
+                            fmt_u64(since.as_slice()).into()
+                        };
                         js["previous_output"] = gen_json_outpoint(&cell.out_point);
                         js
                     };
@@ -123,7 +126,7 @@ fn gen_json_data(
                         fmt_vec(cell.mem_cell_data.clone().unwrap().to_vec().as_slice()).into();
                     js_cell
                 });
-                index += 0;
+                index += 1;
             }
             JsonValue::Array(js_inputs)
         };
@@ -160,7 +163,7 @@ fn gen_json_data(
             JsonValue::Array(js_celldeps)
         };
         let mut js_header_vec: Vec<JsonValue> = Vec::new();
-        let headers = header_deps.clone().unwrap();
+        
 
         for i in 0..resolved_tx.transaction.header_deps().len() {
             js_header_vec.push({
@@ -169,6 +172,7 @@ fn gen_json_data(
                 let mut js = JsonValue::new_object();
                 js["hash"] = fmt_vec(hash.as_slice()).into();
 
+                let headers = header_deps.clone().unwrap();
                 let header_data = headers.get(&hash).unwrap();
                 js["version"] =
                     fmt_u32(header_data.version().to_le_bytes().to_vec().as_slice()).into();
@@ -238,11 +242,13 @@ fn gen_json_data(
             let mut js_inputs: Vec<JsonValue> = Vec::new();
             let mut index: usize = 0;
             for cell in &resolved_tx.resolved_inputs {
-                let input = resolved_tx.transaction.inputs().get(index).unwrap();
-
                 js_inputs.push({
                     let mut js = JsonValue::new_object();
-                    js["since"] = fmt_u64(input.since().as_slice()).into();
+                    js["since"] = {
+                        let input = resolved_tx.transaction.inputs().get(index).unwrap();
+                        let since = input.since();
+                        fmt_u64(since.as_slice()).into()
+                    };
                     js["previous_output"] = gen_json_outpoint(&cell.out_point);
                     js
                 });
