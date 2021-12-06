@@ -152,14 +152,9 @@ name = "ckb-debugger-dumper"
 version = "0.100.0-rc2"
 dependencies = [
  "ckb-chain-spec",
- "ckb-crypto",
- "ckb-error",
- "ckb-hash",
- "ckb-jsonrpc-types",
  "ckb-script",
  "ckb-traits",
  "ckb-types",
- "ckb-vm",
  "json",
  "lazy_static",
  "molecule",
