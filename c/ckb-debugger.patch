@@ -1,0 +1,30 @@
+From 5f7a83334cc19a0010342e572a3673f0af90181c Mon Sep 17 00:00:00 2001
+From: Joii <joii@cryptape.com>
+Date: Tue, 7 Dec 2021 18:39:09 +0800
+Subject: [PATCH] using print to output script data
+
+---
+ bins/src/main.rs | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/bins/src/main.rs b/bins/src/main.rs
+index c8683e2..2dcbd6c 100644
+--- a/bins/src/main.rs
++++ b/bins/src/main.rs
+@@ -259,9 +259,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
+         &verifier_resource,
+         &verifier_env,
+     );
+-    verifier.set_debug_printer(Box::new(|hash: &Byte32, message: &str| {
+-        debug!("script group: {} DEBUG OUTPUT: {}", hash, message);
++    verifier.set_debug_printer(Box::new(|_hash: &Byte32, message: &str| {
++        //debug!("script group: {} DEBUG OUTPUT: {}", hash, message);
++        print!("{}", message);
+     }));
++    
+     let verifier_script_group = verifier
+         .find_script_group(verifier_script_group_type, &verifier_script_hash)
+         .unwrap();
+-- 
+2.25.1
+

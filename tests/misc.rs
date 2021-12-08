@@ -9,11 +9,11 @@ use ckb_types::{
         hardfork::HardForkSwitch,
         Capacity, DepType, EpochNumberWithFraction, HeaderView, ScriptHashType, TransactionBuilder,
     },
-    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgsBuilder},
+    packed::{Byte, Byte32, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgsBuilder},
     prelude::*,
 };
 use rand::{thread_rng, Rng};
-use std::{any::Any, collections::HashMap, io::Read};
+use std::{collections::HashMap, convert::TryInto, io::Read, process::Command, str::from_utf8};
 
 #[derive(Default)]
 pub struct DummyDataLoader {
@@ -129,10 +129,6 @@ pub fn gen_tx_env() -> TxVerifyEnv {
         .epoch(epoch.pack())
         .build();
     TxVerifyEnv::new_commit(&header)
-}
-
-pub fn debug_printer(_script: &Byte32, msg: &str) {
-    print!("{}", msg);
 }
 
 pub fn load_bin(path: &String) -> Bytes {
@@ -305,4 +301,62 @@ pub fn gen_ckb_tx(
         resolved_dep_groups: vec![],
     };
     (tx, dummy)
+}
+
+pub fn vec_to_slice<T, const N: usize>(v: Vec<T>) -> [T; N] {
+    v.try_into()
+        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
+}
+
+pub fn u32_to_uint32(d: u32) -> ckb_types::packed::Uint32 {
+    let b = ckb_types::packed::Uint32::new_builder();
+    let d: Vec<Byte> = d
+        .to_le_bytes()
+        .to_vec()
+        .iter()
+        .map(|f| f.clone().into())
+        .collect();
+    let d: [Byte; 4] = vec_to_slice(d);
+    b.set(d).build()
+}
+
+pub fn u64_to_uint64(d: u64) -> ckb_types::packed::Uint64 {
+    let b = ckb_types::packed::Uint64::new_builder();
+    let d: Vec<Byte> = d
+        .to_le_bytes()
+        .to_vec()
+        .iter()
+        .map(|f| f.clone().into())
+        .collect();
+    let d: [Byte; 8] = vec_to_slice(d);
+    b.set(d).build()
+}
+
+pub fn u128_to_uint128(d: u128) -> ckb_types::packed::Uint128 {
+    let b = ckb_types::packed::Uint128::new_builder();
+    let d: Vec<Byte> = d
+        .to_le_bytes()
+        .to_vec()
+        .iter()
+        .map(|f| f.clone().into())
+        .collect();
+    let d: [Byte; 16] = vec_to_slice(d);
+    b.set(d).build()
+}
+
+pub fn run_ckb_debugger(cmd_line: &str) -> Result<String, i32> {
+    let i = cmd_line.find(" ").unwrap();
+    let cmd_line: String = String::from(cmd_line.split_at(i).1);
+    let cmd_line = cmd_line.trim();
+
+    let output = Command::new("c/build/ckb-debugger-bins")
+        .args(cmd_line.split(" "))
+        .output()
+        .expect("run ckb debugger");
+
+    let output = from_utf8(output.stdout.as_slice()).unwrap();
+    let i = output.rfind("----").unwrap();
+    let output = output.split_at(i + 4).0;
+    //println!("{}", output);
+    Ok(String::from(output))
 }

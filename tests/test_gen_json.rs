@@ -2,11 +2,10 @@ use ckb_script::TransactionScriptsVerifier;
 use ckb_types::{
     bytes::Bytes,
     core::{HeaderBuilder, HeaderView, ScriptHashType},
-    packed::{Byte, Byte32},
-    prelude::{Builder, Entity},
+    packed::Byte32,
 };
 use lazy_static::lazy_static;
-use std::{collections::HashMap, convert::TryInto};
+use std::{collections::HashMap, sync::Mutex};
 
 mod misc;
 use misc::*;
@@ -71,50 +70,26 @@ fn print_mem(d: &[u8]) {
     }
 }
 
-fn vec_to_slice<T, const N: usize>(v: Vec<T>) -> [T; N] {
-    v.try_into()
-        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
-}
-
-fn u32_to_uint32(d: u32) -> ckb_types::packed::Uint32 {
-    let b = ckb_types::packed::Uint32::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 4] = vec_to_slice(d);
-    b.set(d).build()
-}
-
-fn u64_to_uint64(d: u64) -> ckb_types::packed::Uint64 {
-    let b = ckb_types::packed::Uint64::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 8] = vec_to_slice(d);
-    b.set(d).build()
-}
-
-fn u128_to_uint128(d: u128) -> ckb_types::packed::Uint128 {
-    let b = ckb_types::packed::Uint128::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 16] = vec_to_slice(d);
-    b.set(d).build()
-}
-
 pub fn dbg_print_mem(d: &[u8], n: &str) {
     println!("{}, size:{}", n, d.len());
     print_mem(d);
+}
+
+lazy_static! {
+    pub static ref CKB_VM_OUTPUT_DATA: Mutex<HashMap<Byte32, String>> = Mutex::new(HashMap::new());
+}
+
+pub fn debug_printer(script: &Byte32, msg: &str) {
+    let mut output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
+    let it = output_data.get_mut(script);
+    if it.is_none() {
+        output_data.insert(script.clone(), String::from(msg));
+    } else {
+        let it = it.unwrap();
+        it.push_str(msg);
+    }
+
+    //print!("{}", msg);
 }
 
 #[test]
@@ -208,19 +183,32 @@ fn test_multiple() {
 
     let consensus = gen_consensus();
     let env = gen_tx_env();
-    let verifier = TransactionScriptsVerifier::new(&tx, &consensus, &dummy, &env);
+    let mut verifier = TransactionScriptsVerifier::new(&tx, &consensus, &dummy, &env);
+    verifier.set_debug_printer(debug_printer);
     verifier.verify(0xFFFFFFFF).expect("run failed");
 
+    let group_index = 0;
     let cmd_line = ckb_debugger_dumper::gen_json(
         &verifier,
         &tx,
         Option::None,
-        0,
+        group_index,
         DUMP_BIN_PATH.as_str(),
         "test_multi.json",
         Option::None,
     );
-    println!("debugger command is: \n{}", cmd_line);
+    let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
+
+    let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
+    let script_id = groups.get(group_index).unwrap();
+    let ckb_output = {
+        let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
+        let data = output_data.get(script_id).unwrap().clone();
+
+        let i = data.rfind("----").unwrap();
+        String::from(data.split_at(i + 4).0)
+    };
+    assert_eq!(ckb_dbg_output, ckb_output);
 }
 
 #[test]
@@ -279,20 +267,33 @@ fn test_single() {
     let consensus = gen_consensus();
     let env = gen_tx_env();
     let mut verifier = TransactionScriptsVerifier::new(&tx, &consensus, &dummy, &env);
+
     verifier.set_debug_printer(debug_printer);
     verifier.verify(0xFFFFFFFF).expect("run script failed");
 
     let header_dep: HashMap<Byte32, HeaderView> =
         header_dep.iter().map(|f| (f.hash(), f.clone())).collect();
+    let group_index = 0;
     let cmd_line = ckb_debugger_dumper::gen_json(
         &verifier,
         &tx,
         Option::Some(header_dep),
-        0,
+        group_index,
         DUMP_BIN_PATH.as_str(),
         "test.json",
-        Option::Some("127.0.0.1:12300"),
+        Option::None,
     );
 
-    println!("debugger command is: \n{}", cmd_line);
+    let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
+
+    let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
+    let script_id = groups.get(group_index).unwrap();
+    let ckb_output = {
+        let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
+        let data = output_data.get(script_id).unwrap().clone();
+
+        let i = data.rfind("----").unwrap();
+        String::from(data.split_at(i + 4).0)
+    };
+    assert_eq!(ckb_dbg_output, ckb_output);
 }

@@ -29,6 +29,10 @@ build/always_success: always_success.c
 	$(OBJCOPY) --only-keep-debug $@ $@.debug
 	$(OBJCOPY) --strip-debug --strip-all $@
 
+build/ckb-debugger-bins: build_ckb-debugger.sh
+	bash ./build_ckb-debugger.sh
+	
+
 clean:
 	rm -rf build/dump
 	rm -rf build/always_failed
