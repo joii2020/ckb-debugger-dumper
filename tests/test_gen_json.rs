@@ -261,8 +261,6 @@ fn test_single() {
     });
 
     let (tx, dummy) = gen_ckb_tx(cells, deps, header_dep.clone());
-    let data = tx.transaction.hash();
-    println!("{}", data.to_string());
 
     let consensus = gen_consensus();
     let env = gen_tx_env();
@@ -297,3 +295,4 @@ fn test_single() {
     };
     assert_eq!(ckb_dbg_output, ckb_output);
 }
+

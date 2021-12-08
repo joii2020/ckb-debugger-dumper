@@ -2,7 +2,7 @@
 
 #define DBG_PRINT_LEN
 #define DBG_PRINT_HASH
-#define DBG_PRINT_DATA
+//#define DBG_PRINT_DATA
 
 char _bin_to_char(uint8_t b) {
   if (b >= 0 && b <= 9)

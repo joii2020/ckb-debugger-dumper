@@ -184,12 +184,15 @@ int main(int argc, char* argv[]) {
   printf("\n----------------------begin----------------------\n");
   dump_cur_cell_tx_hash();
   dump_cur_cell_script_hash();
-  // dump_cur_cell_script_data();
+  dump_cur_cell_script_data();
   dump_transaction();
 
-  // dump_all_cell_info();
-  // dump_group_cell_info();
+  dump_all_cell_info();
+  dump_group_cell_info();
+  
+  // Because the current bin file depends on being passed in as a file, this item is empty
   // dump_deps_data();
+
   printf("\n-----------------------end-----------------------\n");
   return 0;
 }
