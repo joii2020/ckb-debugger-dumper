@@ -5,8 +5,8 @@ use ckb_types::{
         cell::{CellMeta, ResolvedTransaction},
         HeaderView, ScriptHashType,
     },
-    packed::{Byte32, CellOutput, OutPoint, Script},
-    prelude::Entity,
+    packed::{Byte, Byte32, CellOutput, OutPoint, Script, Uint32},
+    prelude::{Builder, Entity},
 };
 use json::{self, JsonValue};
 use std::{
@@ -45,6 +45,19 @@ fn fmt_vec(d: &[u8]) -> String {
         s.push_str(&String::from(format!("{:02x}", d[i])));
     }
     s
+}
+
+fn u32_to_uint32(d: u32) -> Uint32 {
+    let b = Uint32::new_builder();
+    let d: Vec<Byte> = d
+        .to_le_bytes()
+        .to_vec()
+        .iter()
+        .map(|f| f.clone().into())
+        .collect();
+    let d: [Byte; 4] = vec_to_slice(d);
+    let b = b.set(d);
+    b.build()
 }
 
 fn gen_json_script(sc: &Script) -> JsonValue {
@@ -163,7 +176,6 @@ fn gen_json_data(
             JsonValue::Array(js_celldeps)
         };
         let mut js_header_vec: Vec<JsonValue> = Vec::new();
-        
 
         for i in 0..resolved_tx.transaction.header_deps().len() {
             js_header_vec.push({
@@ -258,7 +270,30 @@ fn gen_json_data(
         };
         js_tx["outputs"] = {
             let mut js_output: Vec<JsonValue> = Vec::new();
-            for cell in &resolved_tx.resolved_inputs {
+
+            let tx_hash = resolved_tx.transaction.hash();
+            let outputs: Vec<CellMeta> = resolved_tx
+                .transaction
+                .outputs_with_data_iter()
+                .enumerate()
+                .map(|(output_index, (cell_output, data))| {
+                    let out_point = OutPoint::new_builder()
+                        .tx_hash(tx_hash.clone())
+                        .index(u32_to_uint32(output_index as u32))
+                        .build();
+                    let data_hash = CellOutput::calc_data_hash(&data);
+                    CellMeta {
+                        cell_output,
+                        out_point,
+                        transaction_info: None,
+                        data_bytes: data.len() as u64,
+                        mem_cell_data: Some(data),
+                        mem_cell_data_hash: Some(data_hash),
+                    }
+                })
+                .collect();
+
+            for cell in &outputs {
                 js_output.push(gen_json_output(&cell.cell_output));
             }
             JsonValue::Array(js_output)

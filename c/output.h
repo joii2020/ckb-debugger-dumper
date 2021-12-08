@@ -62,6 +62,13 @@ void print_data(const uint8_t* buf, uint64_t len, const char* des) {
 #endif  //
 }
 
+void print_mol2_data(mol2_cursor_t* data, const char* des) {
+  uint8_t buffer[2048] = {0};
+  uint32_t buf_len = 2048;
+  buf_len = mol2_read_at(data, buffer, buf_len);
+  print_data(buffer, buf_len, des);
+}
+
 void print_byte32(const uint8_t* data) {
   char hash[32 * 3] = {0};
   _hash_to_str(data, hash);
