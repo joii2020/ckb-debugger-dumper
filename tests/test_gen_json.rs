@@ -187,28 +187,29 @@ fn test_multiple() {
     verifier.set_debug_printer(debug_printer);
     verifier.verify(0xFFFFFFFF).expect("run failed");
 
-    let group_index = 0;
-    let cmd_line = ckb_debugger_dumper::gen_json(
-        &verifier,
-        &tx,
-        Option::None,
-        group_index,
-        DUMP_BIN_PATH.as_str(),
-        "test_multi.json",
-        Option::None,
-    );
-    let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
+    for group_index in 0..3 {
+        let cmd_line = ckb_debugger_dumper::gen_json(
+            &verifier,
+            &tx,
+            Option::None,
+            group_index,
+            DUMP_BIN_PATH.as_str(),
+            "test_multi.json",
+            Option::None,
+        );
+        let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
 
-    let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
-    let script_id = groups.get(group_index).unwrap();
-    let ckb_output = {
-        let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
-        let data = output_data.get(script_id).unwrap().clone();
+        let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
+        let script_id = groups.get(group_index).unwrap();
+        let ckb_output = {
+            let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
+            let data = output_data.get(script_id).unwrap().clone();
 
-        let i = data.rfind("----").unwrap();
-        String::from(data.split_at(i + 4).0)
-    };
-    assert_eq!(ckb_dbg_output, ckb_output);
+            let i = data.rfind("----").unwrap();
+            String::from(data.split_at(i + 4).0)
+        };
+        assert_eq!(ckb_dbg_output, ckb_output);
+    }
 }
 
 #[test]

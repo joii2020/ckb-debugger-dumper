@@ -369,16 +369,13 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
         }
     };
     let json_file_name = std::fs::canonicalize(json_file_name).expect("cannot get absolute path");
-    let script_hash: String = {
-        let i = script_group.input_indices[group_index];
-        let cell = &resolved_tx.resolved_inputs[i];
-        let script = match group_script_type {
-            ScriptGroupType::Lock => cell.cell_output.lock(),
-            ScriptGroupType::Type => cell.cell_output.type_().to_opt().unwrap(),
-        };
-        fmt_vec(script.calc_script_hash().as_slice())
+    let (cell_index, cell_type) = {
+        if script_group.input_indices.len() > 0 {
+            (script_group.input_indices[0], "input")
+        } else {
+            (script_group.output_indices[0], "output")
+        }
     };
-
     let ckb_dbg_str: String = {
         if dbg_addr.is_none() {
             String::new()
@@ -388,12 +385,12 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     };
 
     String::from(format!(
-        "ckb-debugger --bin {} --tx-file {} --cell-index {} --script-group-type {} --script-hash {}{}",
+        "ckb-debugger --bin {} --tx-file {} --cell-index {} --script-group-type {} --cell-type {}{}",
         bin_path.to_str().unwrap(),
         json_file_name.to_str().unwrap(),
-        group_index,
+        cell_index,
         group_type,
-        script_hash,
+        cell_type,
         ckb_dbg_str,
     ))
 }
