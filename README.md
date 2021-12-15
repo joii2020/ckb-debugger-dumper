@@ -56,5 +56,5 @@ pub fn dumper(&self, bin_path: &str, dumper_name: &str) -> String {
     )
 }
 ```
-This code is [here](https://github.com/joii2020/ckb-production-scripts/blob/compact_udt_lock_debugger/tests/compact_udt_rust/src/lib.rs#L1144)
-
+This code is [here](https://github.com/joii2020/ckb-production-scripts/blob/compact_udt_lock_debugger/tests/compact_udt_rust/src/lib.rs#L1144), 
+you can also refer to [this commit](https://github.com/nervosnetwork/ckb-production-scripts/pull/42/files).
