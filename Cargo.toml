@@ -1,19 +1,19 @@
 [package]
 name = "ckb-debugger-dumper"
-version = "0.101.0"
+version = "0.101.1"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ckb-script = "0.101.0"
-ckb-types = "0.101.0"
-ckb-traits = "0.101.0"
+ckb-script = "0.101.1"
+ckb-types = "0.101.1"
+ckb-traits = "0.101.1"
 json = "0.12.4"
 molecule = "0.7.1"
 
 [dev-dependencies]
 ckb-vm = "=0.20.0-rc6"
-ckb-chain-spec = "=0.101.0"
+ckb-chain-spec = "=0.101.1"
 lazy_static = "1.3.0"
 rand = "0.6.5"
