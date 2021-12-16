@@ -199,7 +199,10 @@ fn test_multiple() {
         );
         let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
 
-        let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
+        let groups: Vec<Byte32> = verifier
+            .groups_with_type()
+            .map(|(_f1, f2, _f3)| f2.clone())
+            .collect();
         let script_id = groups.get(group_index).unwrap();
         let ckb_output = {
             let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
@@ -285,7 +288,10 @@ fn test_single() {
 
     let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
 
-    let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
+    let groups: Vec<Byte32> = verifier
+        .groups_with_type()
+        .map(|(_f1, f2, _f3)| f2.clone())
+        .collect();
     let script_id = groups.get(group_index).unwrap();
     let ckb_output = {
         let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
@@ -296,4 +302,3 @@ fn test_single() {
     };
     assert_eq!(ckb_dbg_output, ckb_output);
 }
-
