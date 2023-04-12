@@ -351,8 +351,11 @@ pub fn gen_json<'a, DL: CellDataProvider + HeaderProvider>(
     let mut fs = File::create(path).expect("create json file failed");
     js_root.write_pretty(&mut fs, 2).expect("write json failed");
 
-    let groups_info: Vec<(ScriptGroupType, &'_ ScriptGroup)> =
-        verifier.groups().map(|(f1, _f2, f3)| (f1, f3)).collect();
+    let groups_info: Vec<(ScriptGroupType, &'_ ScriptGroup)> = verifier
+        .groups()
+        .map(|(_f1, f2)| (f2.group_type, f2))
+        .collect();
+
     let (group_script_type, script_group) = {
         let (t, s) = groups_info.get(group_index).unwrap();
         (*t, *s)
