@@ -1,19 +1,21 @@
-use ckb_script::TransactionScriptsVerifier;
+use ckb_script::{TransactionScriptsVerifier, TxVerifyEnv};
 use ckb_types::{
     bytes::Bytes,
     core::{HeaderBuilder, HeaderView, ScriptHashType},
     packed::Byte32,
+    prelude::*,
 };
 use lazy_static::lazy_static;
+use std::sync::Arc;
 use std::{collections::HashMap, sync::Mutex};
 
 mod misc;
 use misc::*;
 
 lazy_static! {
-    pub static ref DUMP_BIN_PATH: String = String::from("c/build/dump");
-    pub static ref ALWAY_SUCCESS_BIN_PATH: String = String::from("c/build/always_success");
-    pub static ref ALWAY_FAILED_BIN_PATH: String = String::from("c/build/always_failed");
+    pub static ref DUMP_BIN_PATH: String = String::from("build/dump");
+    pub static ref ALWAY_SUCCESS_BIN_PATH: String = String::from("build/always_success");
+    pub static ref ALWAY_FAILED_BIN_PATH: String = String::from("build/always_failed");
 }
 
 fn gen_deps() -> HashMap<u32, CkbDepsData> {
@@ -89,7 +91,7 @@ pub fn debug_printer(script: &Byte32, msg: &str) {
         it.push_str(msg);
     }
 
-    //print!("{}", msg);
+    // print!("{}", msg);
 }
 
 #[test]
@@ -182,34 +184,21 @@ fn test_multiple() {
     let (tx, dummy) = gen_ckb_tx(cells, deps, Vec::new());
 
     let consensus = gen_consensus();
-    let env = gen_tx_env();
-    let mut verifier = TransactionScriptsVerifier::new(&tx, &consensus, &dummy, &env);
-    verifier.set_debug_printer(debug_printer);
+    let verifier = TransactionScriptsVerifier::new(
+        Arc::new(tx.clone()),
+        dummy.clone(),
+        Arc::new(consensus),
+        Arc::new(TxVerifyEnv::new_commit(
+            &HeaderView::new_advanced_builder()
+                .epoch(ckb_types::core::EpochNumberWithFraction::new(5, 0, 1).pack())
+                .build(),
+        )),
+    );
+    // verifier.set_debug_printer(debug_printer);
     verifier.verify(0xFFFFFFFF).expect("run failed");
 
-    for group_index in 0..3 {
-        let cmd_line = ckb_debugger_dumper::gen_json(
-            &verifier,
-            &tx,
-            Option::None,
-            group_index,
-            DUMP_BIN_PATH.as_str(),
-            "test_multi.json",
-            Option::None,
-        );
-        let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
-
-        let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
-        let script_id = groups.get(group_index).unwrap();
-        let ckb_output = {
-            let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
-            let data = output_data.get(script_id).unwrap().clone();
-
-            let i = data.rfind("----").unwrap();
-            String::from(data.split_at(i + 4).0)
-        };
-        assert_eq!(ckb_dbg_output, ckb_output);
-    }
+    ckb_debugger_dumper::dump_tx_to_file(&tx, Vec::new(), "test_multi.json", Some("./build/"))
+        .expect("msg");
 }
 
 #[test]
@@ -247,53 +236,36 @@ fn test_single() {
     let mut header_dep: Vec<HeaderView> = Vec::new();
     header_dep.push({
         HeaderBuilder::default()
-            .version(u32_to_uint32(1))
-            .compact_target(u32_to_uint32(1))
-            .timestamp(u64_to_uint64(1231231231))
-            .number(u64_to_uint64(0))
-            .epoch(u64_to_uint64(0))
+            .version(1u32.pack())
+            .compact_target(1u32.pack())
+            .timestamp(1231231231.pack())
+            .number(0.pack())
+            .epoch(0.pack())
             .parent_hash(Byte32::new([0; 32]))
             .transactions_root(Byte32::new([1; 32]))
             .proposals_hash(Byte32::new([2; 32]))
             .extra_hash(Byte32::new([3; 32]))
             .dao(Byte32::new([4; 32]))
-            .nonce(u128_to_uint128(123123132123132))
+            .nonce(123123132123132.pack())
             .build()
     });
 
     let (tx, dummy) = gen_ckb_tx(cells, deps, header_dep.clone());
 
     let consensus = gen_consensus();
-    let env = gen_tx_env();
-    let mut verifier = TransactionScriptsVerifier::new(&tx, &consensus, &dummy, &env);
-
-    verifier.set_debug_printer(debug_printer);
-    verifier.verify(0xFFFFFFFF).expect("run script failed");
-
-    let header_dep: HashMap<Byte32, HeaderView> =
-        header_dep.iter().map(|f| (f.hash(), f.clone())).collect();
-    let group_index = 0;
-    let cmd_line = ckb_debugger_dumper::gen_json(
-        &verifier,
-        &tx,
-        Option::Some(header_dep),
-        group_index,
-        DUMP_BIN_PATH.as_str(),
-        "test.json",
-        Option::None,
+    let verifier = TransactionScriptsVerifier::new(
+        Arc::new(tx.clone()),
+        dummy.clone(),
+        Arc::new(consensus),
+        Arc::new(TxVerifyEnv::new_commit(
+            &HeaderView::new_advanced_builder()
+                .epoch(ckb_types::core::EpochNumberWithFraction::new(5, 0, 1).pack())
+                .build(),
+        )),
     );
 
-    let ckb_dbg_output = run_ckb_debugger(cmd_line.as_str()).unwrap();
+    verifier.verify(0xFFFFFFFF).expect("run script failed");
 
-    let groups: Vec<Byte32> = verifier.groups().map(|(_f1, f2, _f3)| f2.clone()).collect();
-    let script_id = groups.get(group_index).unwrap();
-    let ckb_output = {
-        let output_data = CKB_VM_OUTPUT_DATA.lock().unwrap();
-        let data = output_data.get(script_id).unwrap().clone();
-
-        let i = data.rfind("----").unwrap();
-        String::from(data.split_at(i + 4).0)
-    };
-    assert_eq!(ckb_dbg_output, ckb_output);
+    ckb_debugger_dumper::dump_tx_to_file(&tx, header_dep, "test_sign.json", Some("./build/"))
+        .expect("");
 }
-

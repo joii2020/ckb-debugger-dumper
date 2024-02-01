@@ -1,21 +1,19 @@
 use ckb_chain_spec::consensus::{Consensus, ConsensusBuilder};
-use ckb_script::TxVerifyEnv;
-use ckb_traits::{CellDataProvider, HeaderProvider};
+use ckb_traits::{CellDataProvider, ExtensionProvider, HeaderProvider};
 use ckb_types::{
     bytes::{BufMut, Bytes, BytesMut},
     core::{
-        cell::CellMeta,
-        cell::{CellMetaBuilder, ResolvedTransaction},
-        hardfork::HardForkSwitch,
-        Capacity, DepType, EpochNumberWithFraction, HeaderView, ScriptHashType, TransactionBuilder,
+        cell::{CellMeta, CellMetaBuilder, ResolvedTransaction},
+        hardfork::HardForks,
+        Capacity, DepType, HeaderView, ScriptHashType, TransactionBuilder,
     },
-    packed::{Byte, Byte32, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgsBuilder},
+    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint, Script, WitnessArgsBuilder},
     prelude::*,
 };
 use rand::{thread_rng, Rng};
-use std::{collections::HashMap, convert::TryInto, io::Read, process::Command, str::from_utf8};
+use std::{collections::HashMap, io::Read, process::Command, str::from_utf8};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DummyDataLoader {
     pub cells: HashMap<OutPoint, (CellOutput, ckb_types::bytes::Bytes)>,
 }
@@ -52,6 +50,15 @@ impl CellDataProvider for DummyDataLoader {
 
 impl HeaderProvider for DummyDataLoader {
     fn get_header(&self, _hash: &Byte32) -> Option<HeaderView> {
+        None
+    }
+}
+
+impl ExtensionProvider for DummyDataLoader {
+    fn get_block_extension(
+        &self,
+        _hash: &ckb_types::packed::Byte32,
+    ) -> Option<ckb_types::packed::Bytes> {
         None
     }
 }
@@ -113,22 +120,23 @@ pub struct CkbCellData {
 }
 
 pub fn gen_consensus() -> Consensus {
-    let hardfork_switch = HardForkSwitch::new_without_any_enabled()
-        .as_builder()
-        .rfc_0232(200)
-        .build()
-        .unwrap();
-    ConsensusBuilder::default()
-        .hardfork_switch(hardfork_switch)
-        .build()
-}
-
-pub fn gen_tx_env() -> TxVerifyEnv {
-    let epoch = EpochNumberWithFraction::new(300, 0, 1);
-    let header = HeaderView::new_advanced_builder()
-        .epoch(epoch.pack())
+    ConsensusBuilder::default();
+    let hard_fork = HardForks {
+        ckb2021: ckb_types::core::hardfork::CKB2021::new_mirana()
+            .as_builder()
+            .rfc_0032(5)
+            .build()
+            .unwrap(),
+        ckb2023: ckb_types::core::hardfork::CKB2023::new_mirana()
+            .as_builder()
+            .rfc_0049(10)
+            .build()
+            .unwrap(),
+    };
+    let consensus = ConsensusBuilder::default()
+        .hardfork_switch(hard_fork)
         .build();
-    TxVerifyEnv::new_commit(&header)
+    consensus
 }
 
 pub fn load_bin(path: &String) -> Bytes {
@@ -303,53 +311,12 @@ pub fn gen_ckb_tx(
     (tx, dummy)
 }
 
-pub fn vec_to_slice<T, const N: usize>(v: Vec<T>) -> [T; N] {
-    v.try_into()
-        .unwrap_or_else(|v: Vec<T>| panic!("Expected a Vec of length {} but it was {}", N, v.len()))
-}
-
-pub fn u32_to_uint32(d: u32) -> ckb_types::packed::Uint32 {
-    let b = ckb_types::packed::Uint32::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 4] = vec_to_slice(d);
-    b.set(d).build()
-}
-
-pub fn u64_to_uint64(d: u64) -> ckb_types::packed::Uint64 {
-    let b = ckb_types::packed::Uint64::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 8] = vec_to_slice(d);
-    b.set(d).build()
-}
-
-pub fn u128_to_uint128(d: u128) -> ckb_types::packed::Uint128 {
-    let b = ckb_types::packed::Uint128::new_builder();
-    let d: Vec<Byte> = d
-        .to_le_bytes()
-        .to_vec()
-        .iter()
-        .map(|f| f.clone().into())
-        .collect();
-    let d: [Byte; 16] = vec_to_slice(d);
-    b.set(d).build()
-}
-
-pub fn run_ckb_debugger(cmd_line: &str) -> Result<String, i32> {
+pub fn _run_ckb_debugger(cmd_line: &str) -> Result<String, i32> {
     let i = cmd_line.find(" ").unwrap();
     let cmd_line: String = String::from(cmd_line.split_at(i).1);
     let cmd_line = cmd_line.trim();
 
-    let output = Command::new("c/build/ckb-debugger-bins")
+    let output = Command::new("build/ckb-debugger-bins")
         .args(cmd_line.split(" "))
         .output()
         .expect("run ckb debugger");
